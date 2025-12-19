@@ -1,6 +1,9 @@
 // Package logger provides a zerolog-based logging implementation for Planx.
 // All Planx modules MUST use this logger for consistent logging.
 // Integrates with OpenTelemetry for trace context and log export.
+// Engine-side logging utilities.
+// MUST NOT be imported by SDK or plugins.
+
 package logger
 
 import (

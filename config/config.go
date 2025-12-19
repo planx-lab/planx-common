@@ -1,4 +1,6 @@
-// Package config provides configuration loading utilities for Planx.
+// Package config provides engine-side configuration loading.
+// It MUST NOT be used for plugin configuration.
+
 package config
 
 import (

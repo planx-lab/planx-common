@@ -1,6 +1,6 @@
 // Package otel provides OpenTelemetry instrumentation for Planx.
 // This package is shared by engine and plugins.
-package otel
+package telemetry
 
 import (
 	"context"

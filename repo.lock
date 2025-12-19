@@ -1,0 +1,38 @@
+PLANX COMMON REPOSITORY LOCK (v4.0)
+
+# IMPORT POLICY:
+- Allowed importers: planx-engine
+- Forbidden importers: planx-sdk-*, planx-plugin-*
+
+# SCOPE:
+- Infra utilities only
+- No business logic
+
+
+# The dir metrics:
+ALLOWED:
+- Prometheus registry
+- Engine-level counters
+- Process metrics
+
+FORBIDDEN contents:
+- Pipeline metrics
+- Plugin metrics
+- Per-session metrics
+
+Plugin metrics can only be reported through SDK → Engine,
+not directly import common.
+
+# The Dir telemetry:
+STRICT RULES:
+ONLY responsible for:
+- tracer / meter provider initialization
+- exporter wiring
+
+FORBIDDEN:
+- span semantic definition
+- pipeline / plugin span naming
+- SDK helper
+
+If you find telemetry starts importing SDK / proto in the future,
+that's a signal to split it immediately.

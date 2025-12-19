@@ -1,4 +1,8 @@
 // Package errors provides error types with stack traces for Planx.
+// 不要定义 gRPC status 映射
+// 不要定义 protocol-level error
+// 它只能是：
+// Engine 内部 error 分类 / wrapping
 package errors
 
 import (
