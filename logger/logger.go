@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -43,35 +44,42 @@ func DefaultConfig() Config {
 // Init initializes the global logger with the given configuration.
 func Init(cfg Config) {
 	once.Do(func() {
-		level, err := zerolog.ParseLevel(cfg.Level)
-		if err != nil {
-			level = zerolog.InfoLevel
-		}
-
-		zerolog.SetGlobalLevel(level)
-		zerolog.TimeFieldFormat = time.RFC3339Nano
-
-		var output io.Writer = cfg.Output
-		if cfg.Pretty {
-			output = zerolog.ConsoleWriter{
-				Out:        cfg.Output,
-				TimeFormat: "15:04:05.000",
-			}
-		}
-
-		globalLogger = zerolog.New(output).
-			With().
-			Timestamp().
-			Str("service", cfg.ServiceName).
-			Logger()
+		initLogger(cfg)
 	})
 }
 
-// Get returns the global logger.
-func Get() *zerolog.Logger {
-	if globalLogger.GetLevel() == zerolog.Disabled {
-		Init(DefaultConfig())
+func initLogger(cfg Config) {
+	level, err := zerolog.ParseLevel(cfg.Level)
+	if err != nil {
+		level = zerolog.InfoLevel
 	}
+
+	zerolog.SetGlobalLevel(level)
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+
+	var output io.Writer = cfg.Output
+	if cfg.Pretty {
+		output = zerolog.ConsoleWriter{
+			Out:        cfg.Output,
+			TimeFormat: "15:04:05.000",
+		}
+	}
+
+	globalLogger = zerolog.New(output).
+		With().
+		Timestamp().
+		Str("service", cfg.ServiceName).
+		Logger()
+}
+
+// Get returns the global logger.
+// Auto-initializes with defaults if Init has not been called.
+func Get() *zerolog.Logger {
+	once.Do(func() {
+		if globalLogger.GetLevel() == zerolog.Disabled {
+			initLogger(DefaultConfig())
+		}
+	})
 	return &globalLogger
 }
 
@@ -171,9 +179,12 @@ func AddSpanEvent(ctx context.Context, msg string) {
 // AddSpanEventWithAttrs adds a log message with attributes as a span event.
 func AddSpanEventWithAttrs(ctx context.Context, msg string, attrs map[string]string) {
 	span := trace.SpanFromContext(ctx)
-	if span.IsRecording() {
-		// Note: For full OTel log export, use OTLP log exporter
-		// This is a simple bridge that adds log events to spans
-		span.AddEvent(msg)
+	if !span.IsRecording() {
+		return
 	}
+	var kv []attribute.KeyValue
+	for k, v := range attrs {
+		kv = append(kv, attribute.String(k, v))
+	}
+	span.AddEvent(msg, trace.WithAttributes(kv...))
 }

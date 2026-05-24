@@ -52,6 +52,9 @@ func Wrapf(err error, format string, args ...interface{}) *Error {
 
 // Error implements the error interface.
 func (e *Error) Error() string {
+	if e == nil {
+		return ""
+	}
 	if e.Cause != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
 	}
@@ -60,11 +63,17 @@ func (e *Error) Error() string {
 
 // Unwrap returns the underlying cause.
 func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
 	return e.Cause
 }
 
 // StackTrace returns a formatted stack trace.
 func (e *Error) StackTrace() string {
+	if e == nil {
+		return ""
+	}
 	var sb strings.Builder
 	frames := runtime.CallersFrames(e.Stack)
 	for {

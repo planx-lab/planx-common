@@ -121,6 +121,9 @@ func initMetricsInternal(ctx context.Context, cfg MetricsConfig) error {
 
 // RecordBatchSent records a batch being sent.
 func RecordBatchSent(ctx context.Context, tenantID, stage, pluginType string, recordCount int64) {
+	if batchesSent == nil {
+		return
+	}
 	attrs := []attribute.KeyValue{
 		attribute.String("tenant_id", tenantID),
 		attribute.String("stage", stage),
@@ -132,6 +135,9 @@ func RecordBatchSent(ctx context.Context, tenantID, stage, pluginType string, re
 
 // RecordBatchReceived records a batch being received.
 func RecordBatchReceived(ctx context.Context, tenantID, stage, pluginType string, recordCount int64) {
+	if batchesReceived == nil {
+		return
+	}
 	attrs := []attribute.KeyValue{
 		attribute.String("tenant_id", tenantID),
 		attribute.String("stage", stage),
@@ -143,6 +149,9 @@ func RecordBatchReceived(ctx context.Context, tenantID, stage, pluginType string
 
 // RecordStageLatency records the latency for a pipeline stage.
 func RecordStageLatency(ctx context.Context, stage string, latencyMs float64) {
+	if stageLatency == nil {
+		return
+	}
 	stageLatency.Record(ctx, latencyMs, metric.WithAttributes(
 		attribute.String("stage", stage),
 	))
@@ -150,11 +159,17 @@ func RecordStageLatency(ctx context.Context, stage string, latencyMs float64) {
 
 // RecordAckLatency records the ACK latency.
 func RecordAckLatency(ctx context.Context, latencyMs float64) {
+	if ackLatency == nil {
+		return
+	}
 	ackLatency.Record(ctx, latencyMs)
 }
 
 // RecordError records an error.
 func RecordError(ctx context.Context, tenantID, stage, errorType string) {
+	if errorsTotal == nil {
+		return
+	}
 	errorsTotal.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("tenant_id", tenantID),
 		attribute.String("stage", stage),
@@ -164,6 +179,9 @@ func RecordError(ctx context.Context, tenantID, stage, errorType string) {
 
 // UpdateWindowBacklog updates the window backlog gauge.
 func UpdateWindowBacklog(ctx context.Context, stage string, delta int64) {
+	if windowBacklog == nil {
+		return
+	}
 	windowBacklog.Add(ctx, delta, metric.WithAttributes(
 		attribute.String("stage", stage),
 	))
@@ -171,6 +189,9 @@ func UpdateWindowBacklog(ctx context.Context, stage string, delta int64) {
 
 // UpdateSessionsActive updates the active sessions gauge.
 func UpdateSessionsActive(ctx context.Context, pluginType string, delta int64) {
+	if sessionsActive == nil {
+		return
+	}
 	sessionsActive.Add(ctx, delta, metric.WithAttributes(
 		attribute.String("plugin_type", pluginType),
 	))
@@ -178,5 +199,8 @@ func UpdateSessionsActive(ctx context.Context, pluginType string, delta int64) {
 
 // UpdateInFlightBatches updates the in-flight batches gauge.
 func UpdateInFlightBatches(ctx context.Context, delta int64) {
+	if inFlightBatches == nil {
+		return
+	}
 	inFlightBatches.Add(ctx, delta)
 }

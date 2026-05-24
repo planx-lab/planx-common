@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,7 +17,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracer trace.Tracer
+var (
+	tracer         trace.Tracer
+	tracerProvider *sdktrace.TracerProvider
+	tracingOnce    sync.Once
+	tracerInit     sync.Once
+)
 
 // TracingConfig holds tracing configuration.
 type TracingConfig struct {
@@ -26,6 +32,14 @@ type TracingConfig struct {
 
 // InitTracing initializes OpenTelemetry tracing.
 func InitTracing(ctx context.Context, cfg TracingConfig) error {
+	var initErr error
+	tracingOnce.Do(func() {
+		initErr = initTracingInternal(ctx, cfg)
+	})
+	return initErr
+}
+
+func initTracingInternal(ctx context.Context, cfg TracingConfig) error {
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(cfg.ServiceName),
@@ -37,27 +51,9 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 
 	var exporter sdktrace.SpanExporter
 	if cfg.Endpoint != "" {
-		// Parse headers from env if not provided in config (simplification: usually config has it,
-		// but user snippet implies parsing OTEL_EXPORTER_OTLP_HEADERS or passing them in.
-		// The user snippet uses "otlptracehttp.NewClient()".
-		// We will adapt to use otlptracehttp.
-
 		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(cfg.Endpoint),
 		}
-
-		// If the endpoint is a URL with https, we shouldn't force Insecure unless specifically requested.
-		// The grafana endpoint is https.
-		// otlptracehttp.WithEndpoint takes "host:port", scheme is handled by WithInsecure/WithEncryption.
-		// However, if the user provides a full URL in cfg.Endpoint, we might need to parse it.
-		// Let's assume cfg.Endpoint is just the host if we follow standard OTel layout, OR handle it.
-		// The user snippet says: OTEL_EXPORTER_OTLP_ENDPOINT="https://..."
-
-		// Actually, the user PROMPT snippet in Planx Spec says:
-		// exporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient())
-		// And sets params via ENV vars (because NewClient() with no args reads envs).
-
-		// Let's stick closer to the user snippet:
 		exporter, err = otlptrace.New(ctx, otlptracehttp.NewClient(opts...))
 	} else {
 		exporter, err = stdouttrace.New()
@@ -67,7 +63,7 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 	}
 
 	provider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()), // Spec snippet uses AlwaysSample
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res),
 		sdktrace.WithBatcher(exporter),
 	)
@@ -78,16 +74,29 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 		propagation.Baggage{},
 	))
 
+	tracerProvider = provider
 	tracer = provider.Tracer("planx")
 
 	return nil
 }
 
+// ShutdownTracing gracefully shuts down the tracer provider.
+func ShutdownTracing(ctx context.Context) error {
+	if tracerProvider != nil {
+		tp := tracerProvider
+		tracerProvider = nil
+		return tp.Shutdown(ctx)
+	}
+	return nil
+}
+
 // Tracer returns the global tracer.
 func Tracer() trace.Tracer {
-	if tracer == nil {
-		tracer = otel.Tracer("planx")
-	}
+	tracerInit.Do(func() {
+		if tracer == nil {
+			tracer = otel.Tracer("planx")
+		}
+	})
 	return tracer
 }
 
