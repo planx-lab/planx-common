@@ -79,39 +79,3 @@ func TestInjectExtractTraceContext(t *testing.T) {
 		t.Fatal("ExtractTraceContext returned nil context")
 	}
 }
-
-func TestSpanHelpers(t *testing.T) {
-	ctx := context.Background()
-
-	ctx1, span1 := StartSourceReadSpan(ctx, "tenant-1", "session-1", 100)
-	span1.End()
-	if ctx1 == nil {
-		t.Error("StartSourceReadSpan returned nil context")
-	}
-
-	ctx2, span2 := StartProcessorSpan(ctx, "json", "session-1", 100)
-	span2.End()
-	if ctx2 == nil {
-		t.Error("StartProcessorSpan returned nil context")
-	}
-
-	ctx3, span3 := StartSinkWriteSpan(ctx, "http", "session-1", 100)
-	span3.End()
-	if ctx3 == nil {
-		t.Error("StartSinkWriteSpan returned nil context")
-	}
-
-	ctx4, span4 := StartRouteSpan(ctx, "source", "processor")
-	span4.End()
-	if ctx4 == nil {
-		t.Error("StartRouteSpan returned nil context")
-	}
-}
-
-func TestRecordSpanError(t *testing.T) {
-	ctx := context.Background()
-	_, span := StartSpan(ctx, "test-span")
-	defer span.End()
-
-	RecordSpanError(span, context.Canceled)
-}

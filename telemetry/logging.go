@@ -18,6 +18,7 @@ import (
 var (
 	loggerProvider *sdklog.LoggerProvider
 	loggerOnce     sync.Once
+	lpMu           sync.Mutex // protects loggerProvider reads/writes
 )
 
 // LoggingConfig holds logging configuration.
@@ -73,13 +74,19 @@ func initLoggingInternal(ctx context.Context, cfg LoggingConfig) error {
 
 // ShutdownLogging gracefully shuts down the logger provider.
 func ShutdownLogging(ctx context.Context) error {
-	if loggerProvider != nil {
-		return loggerProvider.Shutdown(ctx)
+	lpMu.Lock()
+	lp := loggerProvider
+	loggerProvider = nil
+	lpMu.Unlock()
+	if lp != nil {
+		return lp.Shutdown(ctx)
 	}
 	return nil
 }
 
 // GetLoggerProvider returns the configured logger provider.
 func GetLoggerProvider() *sdklog.LoggerProvider {
+	lpMu.Lock()
+	defer lpMu.Unlock()
 	return loggerProvider
 }

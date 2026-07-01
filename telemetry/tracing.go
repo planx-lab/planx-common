@@ -6,7 +6,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -22,6 +21,7 @@ var (
 	tracerProvider *sdktrace.TracerProvider
 	tracingOnce    sync.Once
 	tracerInit     sync.Once
+	tpMu           sync.Mutex // protects tracerProvider reads/writes
 )
 
 // TracingConfig holds tracing configuration.
@@ -82,9 +82,11 @@ func initTracingInternal(ctx context.Context, cfg TracingConfig) error {
 
 // ShutdownTracing gracefully shuts down the tracer provider.
 func ShutdownTracing(ctx context.Context) error {
-	if tracerProvider != nil {
-		tp := tracerProvider
-		tracerProvider = nil
+	tpMu.Lock()
+	tp := tracerProvider
+	tracerProvider = nil
+	tpMu.Unlock()
+	if tp != nil {
 		return tp.Shutdown(ctx)
 	}
 	return nil
@@ -140,45 +142,3 @@ func ExtractTraceContext(ctx context.Context, carrier map[string]string) context
 	return propagator.Extract(ctx, propagation.MapCarrier(carrier))
 }
 
-// Span helpers for common operations
-
-// StartSourceReadSpan starts a span for source.read.
-func StartSourceReadSpan(ctx context.Context, tenantID, sessionID string, batchSize int) (context.Context, trace.Span) {
-	return StartSpan(ctx, "source.read",
-		attribute.String("tenant_id", tenantID),
-		attribute.String("session_id", sessionID),
-		attribute.Int("batch_size", batchSize),
-	)
-}
-
-// StartProcessorSpan starts a span for processor.process.
-func StartProcessorSpan(ctx context.Context, processorName, sessionID string, batchSize int) (context.Context, trace.Span) {
-	return StartSpan(ctx, "processor.process",
-		attribute.String("processor", processorName),
-		attribute.String("session_id", sessionID),
-		attribute.Int("batch_size", batchSize),
-	)
-}
-
-// StartSinkWriteSpan starts a span for sink.write.
-func StartSinkWriteSpan(ctx context.Context, sinkName, sessionID string, batchSize int) (context.Context, trace.Span) {
-	return StartSpan(ctx, "sink.write",
-		attribute.String("sink", sinkName),
-		attribute.String("session_id", sessionID),
-		attribute.Int("batch_size", batchSize),
-	)
-}
-
-// StartRouteSpan starts a span for engine.route.
-func StartRouteSpan(ctx context.Context, fromStage, toStage string) (context.Context, trace.Span) {
-	return StartSpan(ctx, "engine.route",
-		attribute.String("from", fromStage),
-		attribute.String("to", toStage),
-	)
-}
-
-// RecordSpanError records an error on the current span.
-func RecordSpanError(span trace.Span, err error) {
-	span.RecordError(err)
-	span.SetStatus(codes.Error, err.Error())
-}

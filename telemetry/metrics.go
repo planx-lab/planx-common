@@ -1,9 +1,11 @@
-// Package otel provides OpenTelemetry instrumentation for Planx.
-// This package is shared by engine and plugins.
+// Package telemetry provides OpenTelemetry instrumentation for Planx.
+// Engine-side utilities only — must not be imported by SDK or plugins.
 package telemetry
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -88,40 +90,115 @@ func initMetricsInternal(ctx context.Context, cfg MetricsConfig) error {
 	)
 
 	otel.SetMeterProvider(provider)
-	meter = provider.Meter("planx")
-
-	// Initialize instruments
-	batchesSent, _ = meter.Int64Counter("planx.batches.sent",
-		metric.WithDescription("Total batches sent"))
-	batchesReceived, _ = meter.Int64Counter("planx.batches.received",
-		metric.WithDescription("Total batches received"))
-	recordsSent, _ = meter.Int64Counter("planx.records.sent",
-		metric.WithDescription("Total records sent"))
-	recordsReceived, _ = meter.Int64Counter("planx.records.received",
-		metric.WithDescription("Total records received"))
-	errorsTotal, _ = meter.Int64Counter("planx.errors.total",
-		metric.WithDescription("Total errors"))
-
-	stageLatency, _ = meter.Float64Histogram("planx.stage.latency",
-		metric.WithDescription("Stage processing latency in milliseconds"),
-		metric.WithUnit("ms"))
-	ackLatency, _ = meter.Float64Histogram("planx.ack.latency",
-		metric.WithDescription("ACK latency in milliseconds"),
-		metric.WithUnit("ms"))
-
-	windowBacklog, _ = meter.Int64UpDownCounter("planx.window.backlog",
-		metric.WithDescription("Window backlog (in-flight batches)"))
-	sessionsActive, _ = meter.Int64UpDownCounter("planx.sessions.active",
-		metric.WithDescription("Active sessions"))
-	inFlightBatches, _ = meter.Int64UpDownCounter("planx.batches.inflight",
-		metric.WithDescription("In-flight batches"))
+	if err := initInstruments(provider); err != nil {
+		return err
+	}
 
 	return nil
 }
 
+// InitMetricsWithReaders initializes metrics with custom readers.
+// This allows callers (like the engine) to provide their own reader
+// (e.g., Prometheus ManualReader) instead of using the default
+// PeriodicReader + OTLP/stdout exporter.
+// Returns the MeterProvider for lifecycle management.
+// Must be called only once in production; tests may call it per-test.
+func InitMetricsWithReaders(ctx context.Context, cfg MetricsConfig, readers ...sdkmetric.Reader) (*sdkmetric.MeterProvider, error) {
+	return initMetricsWithReadersInternal(ctx, cfg, readers...)
+}
+
+func initMetricsWithReadersInternal(ctx context.Context, cfg MetricsConfig, readers ...sdkmetric.Reader) (*sdkmetric.MeterProvider, error) {
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName(cfg.ServiceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := []sdkmetric.Option{sdkmetric.WithResource(res)}
+	for _, r := range readers {
+		opts = append(opts, sdkmetric.WithReader(r))
+	}
+
+	provider := sdkmetric.NewMeterProvider(opts...)
+	otel.SetMeterProvider(provider)
+	if err := initInstruments(provider); err != nil {
+		return nil, err
+	}
+
+	return provider, nil
+}
+
+func initInstruments(provider *sdkmetric.MeterProvider) error {
+	meter = provider.Meter("planx")
+
+	var errs []error
+
+	// Initialize instruments
+	var err error
+	batchesSent, err = meter.Int64Counter("planx.batches.sent",
+		metric.WithDescription("Total batches sent"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating batches.sent counter: %w", err))
+	}
+	batchesReceived, err = meter.Int64Counter("planx.batches.received",
+		metric.WithDescription("Total batches received"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating batches.received counter: %w", err))
+	}
+	recordsSent, err = meter.Int64Counter("planx.records.sent",
+		metric.WithDescription("Total records sent"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating records.sent counter: %w", err))
+	}
+	recordsReceived, err = meter.Int64Counter("planx.records.received",
+		metric.WithDescription("Total records received"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating records.received counter: %w", err))
+	}
+	errorsTotal, err = meter.Int64Counter("planx.errors.total",
+		metric.WithDescription("Total errors"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating errors.total counter: %w", err))
+	}
+
+	stageLatency, err = meter.Float64Histogram("planx.stage.latency",
+		metric.WithDescription("Stage processing latency in milliseconds"),
+		metric.WithUnit("ms"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating stage.latency histogram: %w", err))
+	}
+	ackLatency, err = meter.Float64Histogram("planx.ack.latency",
+		metric.WithDescription("ACK latency in milliseconds"),
+		metric.WithUnit("ms"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating ack.latency histogram: %w", err))
+	}
+
+	windowBacklog, err = meter.Int64UpDownCounter("planx.window.backlog",
+		metric.WithDescription("Window backlog (in-flight batches)"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating window.backlog updowncounter: %w", err))
+	}
+	sessionsActive, err = meter.Int64UpDownCounter("planx.sessions.active",
+		metric.WithDescription("Active sessions"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating sessions.active updowncounter: %w", err))
+	}
+	inFlightBatches, err = meter.Int64UpDownCounter("planx.batches.inflight",
+		metric.WithDescription("In-flight batches"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("creating batches.inflight updowncounter: %w", err))
+	}
+
+	return errors.Join(errs...)
+}
+
 // RecordBatchSent records a batch being sent.
 func RecordBatchSent(ctx context.Context, tenantID, stage, pluginType string, recordCount int64) {
-	if batchesSent == nil {
+	if batchesSent == nil || recordsSent == nil {
 		return
 	}
 	attrs := []attribute.KeyValue{
@@ -135,7 +212,7 @@ func RecordBatchSent(ctx context.Context, tenantID, stage, pluginType string, re
 
 // RecordBatchReceived records a batch being received.
 func RecordBatchReceived(ctx context.Context, tenantID, stage, pluginType string, recordCount int64) {
-	if batchesReceived == nil {
+	if batchesReceived == nil || recordsReceived == nil {
 		return
 	}
 	attrs := []attribute.KeyValue{
