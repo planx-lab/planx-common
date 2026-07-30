@@ -24,8 +24,7 @@ func TestTracer(t *testing.T) {
 }
 
 func TestStartSpan(t *testing.T) {
-	ctx := context.Background()
-	ctx, span := StartSpan(ctx, "test-span")
+	_, span := StartSpan(context.Background(), "test-span")
 	if span == nil {
 		t.Fatal("StartSpan returned nil span")
 	}

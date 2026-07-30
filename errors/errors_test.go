@@ -118,8 +118,8 @@ func TestStackTrace_ContainsFunction(t *testing.T) {
 
 func TestNewConfigError(t *testing.T) {
 	e := NewConfigError("bad config")
-	if e.Error.Message != "bad config" {
-		t.Fatalf("message: got %q", e.Error.Message)
+	if e.Message != "bad config" {
+		t.Fatalf("message: got %q", e.Message)
 	}
 	if e.Error == nil {
 		t.Fatal("embedded Error should not be nil")
@@ -128,16 +128,16 @@ func TestNewConfigError(t *testing.T) {
 
 func TestNewStreamError(t *testing.T) {
 	e := NewStreamError("stream broke")
-	if e.Error.Message != "stream broke" {
-		t.Fatalf("message: got %q", e.Error.Message)
+	if e.Message != "stream broke" {
+		t.Fatalf("message: got %q", e.Message)
 	}
 }
 
 func TestNewBatchError(t *testing.T) {
 	indices := []int{2, 5, 7}
 	e := NewBatchError("partial fail", indices)
-	if e.Error.Message != "partial fail" {
-		t.Fatalf("message: got %q", e.Error.Message)
+	if e.Message != "partial fail" {
+		t.Fatalf("message: got %q", e.Message)
 	}
 	if len(e.FailedIndices) != 3 || e.FailedIndices[0] != 2 {
 		t.Fatalf("indices: got %v", e.FailedIndices)
@@ -153,8 +153,8 @@ func TestNewBatchError_EmptyIndices(t *testing.T) {
 
 func TestNewTransportError(t *testing.T) {
 	e := NewTransportError("timeout", true)
-	if e.Error.Message != "timeout" {
-		t.Fatalf("message: got %q", e.Error.Message)
+	if e.Message != "timeout" {
+		t.Fatalf("message: got %q", e.Message)
 	}
 	if !e.Retryable {
 		t.Fatal("should be retryable")

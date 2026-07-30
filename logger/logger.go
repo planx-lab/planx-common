@@ -57,7 +57,7 @@ func initLogger(cfg Config) {
 	zerolog.SetGlobalLevel(level)
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
-	var output io.Writer = cfg.Output
+	var output = cfg.Output
 	if cfg.Pretty {
 		output = zerolog.ConsoleWriter{
 			Out:        cfg.Output,

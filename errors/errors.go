@@ -81,7 +81,7 @@ func (e *Error) StackTrace() string {
 		if frame.Function == "" {
 			break
 		}
-		sb.WriteString(fmt.Sprintf("  %s\n    %s:%d\n", frame.Function, frame.File, frame.Line))
+		fmt.Fprintf(&sb, "  %s\n    %s:%d\n", frame.Function, frame.File, frame.Line)
 		if !more {
 			break
 		}
