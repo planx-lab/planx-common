@@ -1,25 +1,19 @@
-# AI RULES — PLANX COMMON (MANDATORY)
+# Planx Common
 
-## Authority Documents
+## Collaboration and references
 
-Before working here, read:
-1. [planx-architecture.md](../planx-architecture.md)
-2. [planx-ai-guardrails.md](../planx-ai-guardrails.md)
-3. [AI_CONTRACT.md](../AI_CONTRACT.md)
+Use [workspace guidance](../AGENTS.md) for task completion, authorization and
+proportionate checks. Read relevant clauses of the [canonical contract](../planx-spec/AI_CONTRACT.md),
+[architecture](../planx-spec/planx-architecture.md) and accepted
+[ADR-017](../planx-spec/adr/017-builtin-typed-data-integration.md) when their
+subject changes. Use [repo.lock](repo.lock) for source ownership. Do not reread
+the entire specification for an unrelated edit.
 
----
+## Ownership
 
-## SCOPE
-
-This repository provides Engine-side infrastructure utilities ONLY.
-planx-common is NOT a shared foundation library.
-It is an engine-side infrastructure utility set.
-
----
-
-## IMPORT RESTRICTIONS
-- planx-sdk-*
-- planx-plugin-*
-- planx-proto
-
-It contains no runtime logic, no SPI, and no protocol definitions.
+Provide Engine-side infrastructure utilities only. This is not a foundation
+library for all modules. No runtime, SPI, protocol or domain logic.
+SDK and plugins must not import Common. Common must not depend on SDK, plugins
+or Proto. Metrics/telemetry ownership remains in `repo.lock`; do not move
+pipeline/session semantics into infrastructure initialization.
+Use affected package checks, then `go test ./...` for module changes.
